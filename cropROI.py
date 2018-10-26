@@ -1,28 +1,3 @@
-#----------------------------------------------------- 
-# phantomBMD.py
-#
-# Created by:   Michael Kuczynski
-# Created on:   2018.10.24
-#
-# Description: Automatically calculate BMD for six phantom rods in 
-#              DICOM images in ImageJ.
-#----------------------------------------------------- 
-#
-# Requirements:
-#   -Python 2.7, 3.4 or later
-#   -Fiji (since there is no scripting functionality in ImageJ alone)
-#
-# Usage:
-#   TBD
-#----------------------------------------------------- 
-import os
-from ij import IJ, ImagePlus
-
-# Open a DICOM image
-path = "D:\\DICOMs\\IMAGES\\DECOMPRESSED\\BONE PLUS\\00000002.dcm"
-imp = IJ.openImage(path)
-
-# Cut out the ROI with the six phantom rods
 # Based off of: https://github.com/imagej/imagej-scripting/blob/master/src/main/resources/script_templates/ImageJ2/Crop.py
 #@ Dataset data
 #@OUTPUT Dataset output
@@ -77,17 +52,3 @@ output = crop(ops, data, intervals)
 
 # Create output Dataset
 output = ds.create(output)
-
-# Segment the ROI
-#   1. Filter
-#   2. Histogram Equalization (Enhance Contrast)
-#   3. Edge Detection
-#   4. Threshold Selection
-#   5. Hough Circle Transform - Doesn't work well...
-
-# Generate circular ROIs for each of the six phantom rods
-
-# Calculate the BMD for each rod
-#   Mean of histogram of each rod ROI
-
-# Save the results to a MS Excel file
