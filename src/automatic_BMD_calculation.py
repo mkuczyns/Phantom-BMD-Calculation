@@ -29,6 +29,7 @@
 #
 # TO-DO:
 #   -Add error checking (try/catch)
+#   -Add functionality for multiple DICOM series in a single directory
 #   -Crop phantom ROIs
 #   -Enhance contrast
 #   -Convert to mask
@@ -42,16 +43,20 @@ import sys
 import itk
 
 # Check input arguements
-'''
 if len(sys.argv) < 2:
     print("ERROR: Incorrect script usage:")
-    print("Usage: " + sys.argv[0] + " <Dicom_Directory>")
-'''
+    print("Usage Option #1: python " + sys.argv[0] + " <Dicom_Directory>")
+    print("Usage Option #2: python " + sys.argv[0] + " <Dicom_Directory> <Output_NIfTI_FILENAME>")
+    sys.exit(1)
+
+# Use the specified directory
+dirName = sys.argv[1]
 
 # Create input and output image variables
 # Using NIfTI temporarily...
-#input_filename = sys.argv[1]
-output_filename = "median.nii"
+output_filename = "temp.nii"
+if len(sys.argv) > 2:
+    output_filename = sys.argv[2]
 
 # Specify the DICOM image parameters
 PixelType = itk.ctype("signed short")
@@ -59,24 +64,26 @@ Dimension = 3
 
 ImageType = itk.Image[PixelType, Dimension]
 
-# Image directory
-dirName = 'D:\DICOMs\IMAGES\DECOMPRESSED\BONE PLUS'
-
 # Generate list of DICOM names and series ID
 namesGenerator = itk.GDCMSeriesFileNames.New()
 namesGenerator.SetUseSeriesDetails(True)
+
+# TO-DO: Limit series restriction depending on DICOM series
 namesGenerator.AddSeriesRestriction("00000002|00000325")
+
 namesGenerator.SetGlobalWarningDisplay(False)
 namesGenerator.SetDirectory(dirName)
 
 seriesUID = namesGenerator.GetSeriesUIDs()
 
+# Check if directory contains DICOMs
 if len(seriesUID) < 1:
-    print('No DICOMs in: ' + dirName)
+    print("No DICOMs in: " + dirName)
     sys.exit(1)
 
-print('The directory: ' + dirName)
-print('Contains the following DICOM Series: ')
+# Print out all DICOM series in the provided directory
+print("The directory: " + dirName + " contains the following DICOM Series: ")
+
 for uid in seriesUID:
     print(uid)
 
@@ -85,10 +92,6 @@ seriesFound = False
 
 for uid in seriesUID:
     seriesIdentifier = uid
-
-    if len(sys.argv) > 3:
-        seriesIdentifier = sys.argv[3]
-        seriesFound = True
 
     print('Reading: ' + seriesIdentifier)
 
@@ -104,6 +107,18 @@ for uid in seriesUID:
     # 01 - Filter
     median = itk.MedianImageFilter.New(reader.GetOutput(), Radius = 2)
 
+    # 02 - Enhance Contrast
+
+    # 03 - Threshold
+
+    # 04 - Optional Erode/Dilate
+
+    # 05 - Hough Circle Transform
+
+    # 06 - Create individual ROIs
+
+    # 07 - Calculate BMD
+
     print("Writing out " + output_filename + "...")
 
     # Write out the modified images as NIfTI
@@ -113,6 +128,9 @@ for uid in seriesUID:
     writer.SetInput(median.GetOutput())
     writer.Update()
     
+    # To avoid an infinite loop...
+    seriesFound = True
+
     if seriesFound:
         break
 
