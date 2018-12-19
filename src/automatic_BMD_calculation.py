@@ -40,6 +40,7 @@
 #----------------------------------------------------- 
 
 import sys
+import os
 import itk
 
 # Check input arguements
@@ -51,6 +52,8 @@ if len(sys.argv) < 2:
 
 # Use the specified directory
 dirName = sys.argv[1]
+
+count = len([name for name in os.listdir(dirName) if os.path.isfile(os.path.join(dirName, name))])
 
 # Create input and output image variables
 # Using NIfTI temporarily...
@@ -93,7 +96,7 @@ seriesFound = False
 for uid in seriesUID:
     seriesIdentifier = uid
 
-    print('Reading: ' + seriesIdentifier)
+    print('\nReading: ' + seriesIdentifier)
 
     fileNames = namesGenerator.GetFileNames(seriesIdentifier)
 
@@ -102,36 +105,120 @@ for uid in seriesUID:
     dicomIO = itk.GDCMImageIO.New()
     reader.SetImageIO(dicomIO)
     reader.SetFileNames(fileNames)
-    #reader.ForceOrthogonalDirectionOff()
+    reader.Update()
 
-    # 01 - Filter
-    median = itk.MedianImageFilter.New(reader.GetOutput(), Radius = 2)
+    # 01 - Crop Phantom ROIs
+    #---------------------------------------------------------------------------------------
+    # ROI #1 = (265, 410) -> (400, 460)
+    # ROI #2 = (...) -> (...)
 
-    # 02 - Enhance Contrast
+    size_x = 135
+    size_y = 50
+    size_z = count - 1
+    index_x = 265
+    index_y = 410
+    index_z = 0
 
-    # 03 - Threshold
+    print("Cropping ROI #1...")
 
-    # 04 - Optional Erode/Dilate
+    cropper = itk.ExtractImageFilter.New(Input = reader.GetOutput())
+    extraction_region = cropper.GetExtractionRegion()
+    size = extraction_region.GetSize()
+    size[0] = int(size_x)
+    size[1] = int(size_y)
+    size[2] = int(size_z)
+    index = extraction_region.GetIndex()
+    index[0] = int(index_x)
+    index[1] = int(index_y)
+    index[2] = int(index_z)
+    extraction_region.SetSize(size)
+    extraction_region.SetIndex(index)
+    cropper.SetExtractionRegion(extraction_region)
+    cropper.Update()
 
-    # 05 - Hough Circle Transform
+    # 02 - Filter
+    #---------------------------------------------------------------------------------------
+    # Median filter, radius = 3
 
-    # 06 - Create individual ROIs
+    MF_radius = 3
+    print("Applying median filter with radius = " + str(MF_radius))
+    median = itk.MedianImageFilter.New(Input = cropper.GetOutput(), Radius = MF_radius)
+    median.Update()
 
-    # 07 - Calculate BMD
+    # 03 - Adaptive Histogram Equalization
+    #---------------------------------------------------------------------------------------
+    # Alpha = 1 -> unsharp mask
+    # Beta  = 0
+    # Window/Radius = 5
 
-    print("Writing out " + output_filename + "...")
+    AHE_alpha = float(1)
+    AHE_beta = float(0)
+    AHE_radius = int(5)
+
+    print("Appying adaptive histogram equalization with alpha = " + str(AHE_alpha) + 
+            ", beta = " + str(AHE_beta) + ", and radius = " + str(AHE_radius))
+
+    histogramEqualization = itk.AdaptiveHistogramEqualizationImageFilter.New(median.GetOutput())
+    histogramEqualization.SetAlpha(AHE_alpha)
+    histogramEqualization.SetBeta(AHE_beta)
+
+    radius = itk.Size[Dimension]()
+    radius.Fill(AHE_radius)
+    histogramEqualization.SetRadius(radius)
+    histogramEqualization.Update()
+
+    # 04 - Threshold
+    #---------------------------------------------------------------------------------------
+    # Otsu Segmentation
+
+    thresholdFilter = itk.OtsuMultipleThresholdsImageFilter[ImageType, ImageType].New()
+    thresholdFilter.SetInput(histogramEqualization.GetOutput())
+
+    # Default values
+    thresholdFilter.SetNumberOfHistogramBins(128)
+    thresholdFilter.SetNumberOfThresholds(1)
+    thresholdFilter.SetLabelOffset(0)
+    thresholdFilter.Update()
+
+    rescaler = itk.RescaleIntensityImageFilter[ImageType, ImageType].New()
+    rescaler.SetInput(thresholdFilter.GetOutput())
+    rescaler.SetOutputMinimum(0)
+    rescaler.SetOutputMaximum(255)
+    rescaler.Update()
+
+    # 05 - Optional Erode/Dilate
+    #---------------------------------------------------------------------------------------
+    # TO-DO: test and implement or remove completely
+
+
+    # 06 - Hough Circle Transform
+    #---------------------------------------------------------------------------------------
+    circle = itk.HoughTransform2DCirclesImageFilter.New()
+    circle.SetInput(rescaler.GetOutput())
+    circle.SetMinimumRadius(30.0)
+    circle.SetMaximumRadius(40.0)
+    circle.Update()
+
+    # 07 - Create individual ROIs
+    #---------------------------------------------------------------------------------------
+
+
+    # 08 - Calculate BMD
+    #---------------------------------------------------------------------------------------
+
+    print("\nWriting out " + output_filename + "...")
 
     # Write out the modified images as NIfTI
     writer = itk.ImageFileWriter[ImageType].New()
     writer.SetFileName(output_filename)
     writer.UseCompressionOn()
-    writer.SetInput(median.GetOutput())
+    writer.SetInput(circle.GetOutput())
     writer.Update()
-    
+
     # To avoid an infinite loop...
     seriesFound = True
 
     if seriesFound:
         break
 
-print("Done!")
+print("\nDone!")
