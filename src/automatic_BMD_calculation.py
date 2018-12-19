@@ -40,6 +40,7 @@
 #----------------------------------------------------- 
 
 import sys
+import os
 import itk
 
 # Check input arguements
@@ -51,6 +52,8 @@ if len(sys.argv) < 2:
 
 # Use the specified directory
 dirName = sys.argv[1]
+
+count = len([name for name in os.listdir(dirName) if os.path.isfile(os.path.join(dirName, name))])
 
 # Create input and output image variables
 # Using NIfTI temporarily...
@@ -93,7 +96,7 @@ seriesFound = False
 for uid in seriesUID:
     seriesIdentifier = uid
 
-    print('Reading: ' + seriesIdentifier)
+    print('\nReading: ' + seriesIdentifier)
 
     fileNames = namesGenerator.GetFileNames(seriesIdentifier)
 
@@ -102,36 +105,79 @@ for uid in seriesUID:
     dicomIO = itk.GDCMImageIO.New()
     reader.SetImageIO(dicomIO)
     reader.SetFileNames(fileNames)
-    #reader.ForceOrthogonalDirectionOff()
+    reader.Update()
 
-    # 01 - Filter
-    median = itk.MedianImageFilter.New(reader.GetOutput(), Radius = 2)
+    # 01 - Crop Phantom ROIs
+    size_x = 135
+    size_y = 50
+    size_z = count - 1
+    index_x = 265
+    index_y = 410
+    index_z = 0
 
-    # 02 - Enhance Contrast
+    print("Cropping ROI #1...")
 
-    # 03 - Threshold
+    cropper = itk.ExtractImageFilter.New(Input = reader.GetOutput())
+    extraction_region = cropper.GetExtractionRegion()
+    size = extraction_region.GetSize()
+    size[0] = int(size_x)
+    size[1] = int(size_y)
+    size[2] = int(size_z)
+    index = extraction_region.GetIndex()
+    index[0] = int(index_x)
+    index[1] = int(index_y)
+    index[2] = int(index_z)
+    extraction_region.SetSize(size)
+    extraction_region.SetIndex(index)
+    cropper.SetExtractionRegion(extraction_region)
+    cropper.Update()
 
-    # 04 - Optional Erode/Dilate
+    # 02 - Filter
+    MF_radius = 3
+    print("Applying median filter with radius = " + str(MF_radius))
+    median = itk.MedianImageFilter.New(Input = cropper.GetOutput(), Radius = MF_radius)
+    median.Update()
 
-    # 05 - Hough Circle Transform
+    # 03 - Adaptive Histogram Equalization
+    AHE_alpha = float(1)
+    AHE_beta = float(0)
+    AHE_radius = int(5)
 
-    # 06 - Create individual ROIs
+    print("Appying adaptive histogram equalization with alpha = " + str(AHE_alpha) + 
+            ", beta = " + str(AHE_beta) + ", and radius = " + str(AHE_radius))
 
-    # 07 - Calculate BMD
+    histogramEqualization = itk.AdaptiveHistogramEqualizationImageFilter.New(median.GetOutput())
+    histogramEqualization.SetAlpha(AHE_alpha)
+    histogramEqualization.SetBeta(AHE_beta)
+    histogramEqualization.Update()
 
-    print("Writing out " + output_filename + "...")
+    radius = itk.Size[Dimension]()
+    radius.Fill(AHE_radius)
+    histogramEqualization.SetRadius(radius)
+
+    # 04 - Threshold
+
+    # 05 - Optional Erode/Dilate
+
+    # 06 - Hough Circle Transform
+
+    # 07 - Create individual ROIs
+
+    # 08 - Calculate BMD
+
+    print("\nWriting out " + output_filename + "...")
 
     # Write out the modified images as NIfTI
     writer = itk.ImageFileWriter[ImageType].New()
     writer.SetFileName(output_filename)
     writer.UseCompressionOn()
-    writer.SetInput(median.GetOutput())
+    writer.SetInput(histogramEqualization.GetOutput())
     writer.Update()
-    
+
     # To avoid an infinite loop...
     seriesFound = True
 
     if seriesFound:
         break
 
-print("Done!")
+print("\nDone!")
