@@ -28,7 +28,6 @@
 *
 * TO-DO:
 *   -Add error checking (try/catch)
-*   -Add functionality for multiple DICOM series in a single directory
 *
 *----------------------------------------------------- */
 
@@ -108,6 +107,8 @@ int main(int argc, char * argv[])
         seriesItr = seriesUID.begin();
 
         // Loop through each DICOM series in the directory
+        // TO-DO: only perform processing on the first encountered DICOM series
+        // TO-DO: add option for specifying the DICOM series
         while (seriesItr != seriesUID.end())
         {
             std::string seriesIdentifier;
