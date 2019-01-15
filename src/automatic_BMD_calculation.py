@@ -61,6 +61,8 @@ count = len([name for name in listdir(dirName) if path.isfile(path.join(dirName,
 
 count = len([name for name in os.listdir(dirName) if os.path.isfile(os.path.join(dirName, name))])
 
+count = len([name for name in os.listdir(dirName) if os.path.isfile(os.path.join(dirName, name))])
+
 # Create input and output image variables
 # Using NIfTI temporarily...
 output_filename = "temp.nii"
